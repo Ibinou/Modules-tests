@@ -48,16 +48,17 @@
             .sheet-modal {
                 left: 50%;
                 right: auto;
-                bottom: 50%;
-                width: 500px;
-                height: 600px;
+                top: 50%;
+                bottom: auto;
+                width: min(500px, 90vw);
+                height: min(600px, 85vh);
                 border-radius: 20px;
-                transform: translate(-50%, 50%) translateY(100%);
+                transform: translate(-50%, -50%) translateY(150vh);
                 box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
             }
 
             .sheet-modal.active {
-                transform: translate(-50%, 50%) translateY(0);
+                transform: translate(-50%, -50%) translateY(0);
             }
         }
 
@@ -82,7 +83,7 @@
 
         @media (min-width: 768px) {
             .sheet-content {
-                height: calc(600px - 40px);
+                height: calc(min(600px, 85vh) - 40px);
             }
         }
 
@@ -152,7 +153,7 @@
             
             if (isDesktop) {
                 // Sur desktop, on translate vers le bas
-                sheet.style.transform = `translate(-50%, 50%) translateY(${deltaY}px)`;
+                sheet.style.transform = `translate(-50%, -50%) translateY(${deltaY}px)`;
             } else {
                 // Sur mobile, comportement normal
                 sheet.style.transform = `translateY(${deltaY}px)`;
@@ -175,7 +176,64 @@
                 closeSheet();
             } else {
                 if (isDesktop) {
-                    sheet.style.transform = 'translate(-50%, 50%) translateY(0)';
+                    sheet.style.transform = 'translate(-50%, -50%) translateY(0)';
+                } else {
+                    sheet.style.transform = 'translateY(0)';
+                }
+                overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+            }
+        }
+
+        // Scroll to close (iOS style)
+        let scrollStartY = 0;
+        let isScrollClosing = false;
+
+        function handleScroll(e) {
+            if (!sheet.classList.contains('active')) return;
+            
+            const content = document.querySelector('.sheet-content');
+            
+            // Si on est en haut du contenu et qu'on scroll vers le bas
+            if (content.scrollTop <= 0 && e.deltaY < 0) {
+                e.preventDefault();
+                
+                if (!isScrollClosing) {
+                    isScrollClosing = true;
+                    sheet.style.transition = 'none';
+                }
+                
+                const scrollDelta = Math.abs(e.deltaY);
+                const currentTransform = sheet.style.transform;
+                const currentY = currentTransform.match(/translateY\(([^)]+)\)/);
+                const currentValue = currentY ? parseFloat(currentY[1]) : 0;
+                
+                const newY = Math.max(0, currentValue + scrollDelta * 3);
+                
+                const isDesktop = window.innerWidth >= 768;
+                if (isDesktop) {
+                    sheet.style.transform = `translate(-50%, -50%) translateY(${newY}px)`;
+                } else {
+                    sheet.style.transform = `translateY(${newY}px)`;
+                }
+                
+                // Adapter l'opacity de l'overlay
+                const progress = Math.min(newY / 200, 1);
+                overlay.style.background = `rgba(0, 0, 0, ${0.5 * (1 - progress * 0.8)})`;
+                
+                // Fermer si on a assez scrollé
+                if (newY > 100) {
+                    closeSheet();
+                    isScrollClosing = false;
+                }
+            } else if (isScrollClosing && e.deltaY > 0) {
+                // Si on scroll vers le haut, remettre en place
+                e.preventDefault();
+                isScrollClosing = false;
+                sheet.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                
+                const isDesktop = window.innerWidth >= 768;
+                if (isDesktop) {
+                    sheet.style.transform = 'translate(-50%, -50%) translateY(0)';
                 } else {
                     sheet.style.transform = 'translateY(0)';
                 }
@@ -190,6 +248,9 @@
         document.addEventListener('touchmove', handleMove, { passive: false });
         document.addEventListener('mouseup', handleEnd);
         document.addEventListener('touchend', handleEnd);
+        
+        // Scroll to close
+        sheet.addEventListener('wheel', handleScroll, { passive: false });
         
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && sheet.classList.contains('active')) closeSheet();
